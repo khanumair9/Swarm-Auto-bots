@@ -1,0 +1,258 @@
+#include <esp_now.h>
+#include <WiFi.h>
+#include <Arduino.h>
+#include <analogWrite.h>
+int Echo1 = 21;
+int Trig1 = 19;
+int Echo2 = 2;
+int Trig2 = 4;
+int Echo3 = 18;
+int Trig3 = 5;
+int in1 = 27;
+int in2 = 26;
+int in3 = 25;
+int in4 = 33;
+int ENA = 14;
+int ENB = 12;
+int ABS = 145;
+int ABS2 = 145;
+int ABS3 = 175;
+int ABS4 = 175;
+int Left_Distance = 0, Right_Distance = 0, Middle_Distance = 0;
+
+void _mForward(){
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  analogWrite(ENA, ABS);
+  analogWrite(ENB, ABS);
+  Serial.print("ROBOT_MOVING_FARWARD");
+}
+
+void _mBack(){
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  analogWrite(ENA, ABS);
+  analogWrite(ENB, ABS);
+  Serial.print("ROBOT_MOVING_BACKWARD");
+}
+
+void _mleft(){
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  analogWrite(ENA, ABS3);
+  analogWrite(ENB, ABS4);
+  Serial.print("ROBOT_MOVING_LEFT");
+}
+
+void _mright(){
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  analogWrite(ENA, ABS3);
+  analogWrite(ENB, ABS4);
+  Serial.print("ROBOT_MOVING_RIGHT");
+}
+
+void _mStop(){
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+  analogWrite(ENA, LOW);
+  analogWrite(ENB, LOW);
+  Serial.print("ROBOT_STOP");
+}
+
+//Ultrasonic distance measurement:
+int Left_Distance_test(){
+  digitalWrite(Trig2, LOW);
+  delayMicroseconds(2);
+  digitalWrite(Trig2, HIGH);
+  delayMicroseconds(20);
+  digitalWrite(Trig2, LOW);
+  float Fdistance = pulseIn(Echo2, HIGH);
+  delay(10);
+
+  Fdistance = Fdistance / 29 / 2;
+  return (int)Fdistance;
+}
+
+int Middle_Distance_test(){
+  digitalWrite(Trig3, LOW);
+  delayMicroseconds(2);
+  digitalWrite(Trig3, HIGH);
+  delayMicroseconds(20);
+  digitalWrite(Trig3, LOW);
+  float Fdistance = pulseIn(Echo3, HIGH);
+  delay(10);
+
+  Fdistance = Fdistance / 29 / 2;
+  return (int)Fdistance;
+}
+
+int Right_Distance_test(){
+  digitalWrite(Trig1, LOW);
+  delayMicroseconds(2);
+  digitalWrite(Trig1, HIGH);
+  delayMicroseconds(20);
+  digitalWrite(Trig1, LOW);
+  float Fdistance = pulseIn(Echo1, HIGH);
+  delay(10);
+
+  Fdistance = Fdistance / 29 / 2;
+  return (int)Fdistance;
+}
+///////////////////
+
+uint8_t broadcastAddress1[] = {0x08, 0x3A, 0xF2, 0x8D, 0xC0, 0x64};
+uint8_t broadcastAddress2[] = {0x0C, 0xB8, 0x15, 0xF3, 0xD1, 0x2C};
+typedef struct struct_message {
+  int a; 
+} test_struct;
+
+test_struct test;
+
+esp_now_peer_info_t peerInfo;
+
+// callback when data is sent
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  char macStr[18];
+  Serial.print("Packet to: ");
+  // Copies the sender mac address to a string
+  snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+           mac_addr[0], mac_addr[1], mac_addr[2]);
+  Serial.print(macStr);
+  Serial.print(" send status:\t");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+
+}
+ 
+void setup() {
+
+pinMode(Echo1, INPUT);
+  pinMode(Trig1, OUTPUT);
+  pinMode(Echo2, INPUT);
+  pinMode(Trig2, OUTPUT);
+  pinMode(Echo3, INPUT);
+  pinMode(Trig3, OUTPUT);
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  _mStop();
+  
+  // Init Serial Monitor
+  Serial.begin(115200);
+ 
+  // Set device as a Wi-Fi Station
+   WiFi.mode(WIFI_STA);
+ 
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+  
+  esp_now_register_send_cb(OnDataSent);
+   
+  // register peer
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+  // register first peer  
+  memcpy(peerInfo.peer_addr, broadcastAddress1, 6);
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+  // register second peer  
+  memcpy(peerInfo.peer_addr, broadcastAddress2, 6);
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+}
+ 
+void loop() {
+
+esp_err_t result = esp_now_send(0, (uint8_t *) &test, sizeof(test_struct));
+  
+Left_Distance = Left_Distance_test();
+  delay(10);
+  Middle_Distance = Middle_Distance_test();
+  delay(10);
+  Right_Distance = Right_Distance_test();
+  delay(10);
+
+  if(Middle_Distance <= 20){
+    if(Right_Distance > Left_Distance){
+      if((Right_Distance <= 20) && (Left_Distance <= 20)){
+
+         
+        _mStop();
+        delay(200);
+        test.a = 2;
+      delay(200);
+        _mBack();
+        delay(1000);
+             test.a = 5;
+              delay(100);
+      }
+      else{
+        _mright();
+        delay(10);
+        test.a = 3;
+         delay(100);
+      }
+      }
+      else if(Right_Distance < Left_Distance){
+        if((Right_Distance <= 20) && (Left_Distance <= 20)){
+       
+       _mStop();
+        delay(100);
+        test.a = 2;
+         delay(100);
+        _mBack();
+        delay(1000);
+         test.a = 5;
+          delay(100);
+      }
+      else{
+        _mleft();
+        delay(100);
+           test.a = 4;
+            delay(100);
+      }
+    }
+    }
+
+    else if(Right_Distance <= 20){
+
+      _mleft();
+      delay(100);
+      test.a = 4;
+       delay(100);
+    }
+
+    else if(Left_Distance <= 20){
+      _mright();
+      delay(100);
+      test.a = 3;
+       delay(100);
+    }
+
+    else{
+       
+      _mForward();
+      test.a = 1;
+       delay(100);
+    }
+}
